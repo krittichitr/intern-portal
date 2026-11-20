@@ -1,29 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { app } from "../src/server.js";
-import { prisma } from "../src/lib/prisma.js";
-import { config } from "../src/config.js";
+const testUrl = process.env.RBAC_TEST_DATABASE_URL;
+let app, prisma, config;
+if (testUrl) {
+  const target = new URL(testUrl);
+  assert.ok(["postgres:", "postgresql:"].includes(target.protocol));
+  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(target.hostname));
+  const database = decodeURIComponent(target.pathname.slice(1));
+  assert.match(database, /^login_rbac_test_[a-z0-9_]+$/);
+  assert.equal(target.searchParams.get("schema") || "public", "public");
+  if (process.env.DATABASE_URL) assert.notEqual(database, decodeURIComponent(new URL(process.env.DATABASE_URL).pathname.slice(1)));
+  process.env.DATABASE_URL = testUrl;
+  process.env.JWT_SECRET = randomBytes(48).toString("hex");
+  process.env.NODE_ENV = "test";
+  ({ app } = await import("../src/server.js"));
+  ({ prisma } = await import("../src/lib/prisma.js"));
+  ({ config } = await import("../src/config.js"));
+}
 
-// These tests require the configured PostgreSQL database. Only random fixture IDs
-// created by this run are removed; existing users are never updated or deleted.
-test("Authentication over HTTP with real PostgreSQL", async (t) => {
+// Explicit disposable database only; no application DB fallback before imports.
+test("Authentication over HTTP with real PostgreSQL", { skip: !testUrl }, async (t) => {
   const originalUsers = await prisma.users.findMany({ orderBy: { id: "asc" } });
   const fixtureId = randomUUID();
   const inactiveId = randomUUID();
   const username = `test_${fixtureId.replaceAll("-", "")}`;
   const password = `${randomUUID()}!`;
-  const publicUser = { id: fixtureId, username, email: `${username}@example.invalid`, role: "USER" };
+  const publicUser = {
+    id: fixtureId, username, email: `${username}@example.invalid`, role: "USER",
+    firstName: null, lastName: null, phone: null, avatarUrl: null,
+  };
   let server;
   const createdIds = [];
+  let createdRoleId;
   try {
+    let role = await prisma.roles.findUnique({ where: { code: "USER" } });
+    if (!role) {
+      role = await prisma.roles.create({ data: { code: "USER", name: "User" } });
+      createdRoleId = role.id;
+    }
     const hash = await bcrypt.hash(password, 12);
     for (const [id, active, name] of [[fixtureId, true, username], [inactiveId, false, `off_${inactiveId}`]]) {
       await prisma.users.create({ data: {
         id, username: name, email: `${name}@example.invalid`, password_hash: hash,
-        role: "USER", is_active: active, updated_at: new Date(),
+        role: "USER", role_id: role.id, is_active: active, updated_at: new Date(),
       } });
       createdIds.push(id);
     }
@@ -173,6 +195,7 @@ test("Authentication over HTTP with real PostgreSQL", async (t) => {
     if (server) await new Promise((resolve) => server.close(resolve));
     try {
       if (createdIds.length) await prisma.users.deleteMany({ where: { id: { in: createdIds } } });
+      if (createdRoleId) await prisma.roles.delete({ where: { id: createdRoleId } });
       const remainingUsers = await prisma.users.findMany({ orderBy: { id: "asc" } });
       assert.ok(JSON.stringify(remainingUsers) === JSON.stringify(originalUsers), "Existing database users must remain unchanged");
     } finally { await prisma.$disconnect(); }

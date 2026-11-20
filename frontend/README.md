@@ -29,7 +29,7 @@ API client ใช้ `VITE_API_BASE_URL` หรือค่าเริ่มต
 ```sh
 npm run build       # สร้าง dist
 npm run preview     # preview build; ไม่ใช่ production hosting
-npm test            # 14 tests: React DOM + mock Axios
+npm test            # React DOM + mock Axios; ดูจำนวนล่าสุดจากผลคำสั่ง
 npm run test:ui     # 16 browser checks: mocked API, ใช้ Google Chrome ที่ติดตั้งอยู่
 npm run test:e2e    # real API + existing account; กรอกรหัสผ่านเองใน Chrome
 ```
@@ -140,3 +140,77 @@ shadcn/ui เป็น source components ใน `src/components/ui` ไม่ใ
 - `npm audit` ของ Frontend ไม่พบ vulnerabilities
 
 ก่อน production ต้องตั้ง API URL/HTTPS และ CORS/cookie ให้ตรง deployment รวมถึงตั้ง web server ให้ fallback เส้นทาง SPA ไป `index.html` การป้องกัน CSRF, rate limiting และข้อจำกัด stateless JWT ยังต้องจัดการฝั่ง Backend ตามโครงการเดิม ไม่เพิ่มหรือเปลี่ยน backend security ในงานนี้
+
+
+## C1–C2 Role Relation — 20 พฤศจิกายน 2026
+
+Backend ยังคงส่ง `user.role` เป็น String แต่ใช้ Role Relation เป็นแหล่งข้อมูล AuthContext/Login/AuthStatus รองรับ `403 + RBAC_NOT_READY` แยกจาก Network Error พร้อมข้อความให้ติดต่อผู้ดูแล Session Check ล้าง User เก่าและยกเลิกผลของ Profile/Avatar Response ที่ค้างอยู่ด้วย Revision เดิม ไม่มีการเปลี่ยน Design หรือ JWT/Cookie ผลตรวจล่าสุด: Frontend Tests 100 PASS, Build PASS และ Lint PASS (ผลจำนวน Tests ก่อนหน้านี้เป็นประวัติเดิม)
+
+
+## Frontend RBAC — งานครบหน้าตาม Assignment (20 พฤศจิกายน 2026)
+
+### Routes และหน้าจอ
+
+| Route | ฟังก์ชัน |
+|---|---|
+| /login | Login เดิม; หลังสำเร็จใช้ Landing ตามสิทธิ์ |
+| /dashboard | Dashboard เดิมผ่าน Menu Grant |
+| /profile | Profile/Edit/Avatar เดิมผ่าน Menu Grant |
+| /admin/menus | ตาราง/เพิ่ม/แก้ไข/ลบ/Parent/Icon/Path/Sort/Active |
+| /admin/roles | Role CRUD และ Explicit Menu Checkboxes |
+| /admin/users | ตาราง User แบบแบ่งหน้า เลือก Role เดียวแล้ว Save |
+| /403 | ข้อความไม่มีสิทธิ์, Reload Permissions, กลับหน้าที่เข้าได้ และ Logout |
+
+Admin Screens ต้องมี Role ADMIN และ Direct Menu Grant ด้วย Unknown Paths แสดง 404 ไม่สร้างหน้าจาก Menu Path อัตโนมัติ Menu CRUD ไม่ได้สร้าง React Component ใหม่ ผู้พัฒนาต้องลงทะเบียนหน้าใน App/pageRegistry ก่อน
+
+### การโหลดและ State
+
+MenuProvider แยกจาก AuthContext เรียก /me/menus หลัง Auth พร้อม ใช้ข้อมูลจาก API จริง ไม่มี Fallback Hardcode Grants และไม่เก็บ Token/Cookie Value ใน React หรือ Browser Storage ตรวจ Contract/Allowed Paths ให้สอดคล้อง Tree ก่อนนำเข้า State
+
+ใช้ Session Version + User ID + Role เป็น Scope, Promise Dedup ใน StrictMode และตัดผล Request เก่าเมื่อ Logout/เปลี่ยนบัญชี/Role Profile/Avatar เปลี่ยนแต่ Role เดิมไม่โหลดเมนูซ้ำโดยไม่จำเป็น Background Reload รักษาฟอร์มที่กำลังแก้ หากสิทธิ์ยังอยู่ เมื่อ API ยืนยันว่าถูกถอนจึงออกไป 403; Network/Invalid Response แสดง Retry แยกจาก No Grants
+
+Window Focus โหลดสิทธิ์ล่าสุด โดยใช้ Request เดียวร่วม Desktop/Mobile Sidebar; Check Session บน Dashboard โหลดสิทธิ์ด้วย Root/Login/PublicRoute ใช้ Landing เดียวกัน: Dashboard ถ้าอนุญาต → Registered Page แรกตาม Tree → /403 ไม่มี Redirect Loop เมนู Parent ที่ไม่มี Grant เป็น Group คลิกไม่ได้
+
+### การบันทึก
+
+ใช้ Axios เดิม/withCredentials และ Sonner ที่ติดตั้งอยู่แล้ว แจ้งสำเร็จหลัง Backend ยืนยัน มี Pending Guards/Disabled Buttons ป้องกันกดซ้ำ Error 400/401/403/409/500/Network แสดงข้อความและ Retry ตามจุดที่เกิด ไม่แสดงสำเร็จเมื่อ API ล้มเหลว Delete ใช้ shadcn AlertDialog; Cancel ไม่ส่ง Request
+
+Menu Form ส่งเฉพาะ 6 Editable Fields, กันเลือกตนเอง/Descendants เป็น Parent Role Form Code กำหนดเฉพาะตอน Create ส่วน Edit แก้ Name; Checkbox Assign ส่ง menuIds ทั้งชุด ไม่มี Permission รายคำสั่ง User Assignment ส่ง { roleId } เพียงค่าเดียว Target Response ไม่ทับ Admin AuthContext หากเป็นคนละ id Self-role Change ตรวจ Session/Permissions ใหม่ทันทีและออกจากหน้าที่ไม่มีสิทธิ์
+
+User Picker ใช้ Supporting GET /users?page=…&pageSize=10 ตาม D005 เดิม (Backend เพิ่ม Read-only/Admin-only เท่านั้น) ไม่เพิ่ม Create/Delete/Deactivate User Profile Backend Write Guards เชื่อม /profile Grant แล้ว Me/Logout/รูป Public ยังใช้ Flow เดิม
+
+### ไฟล์หลัก
+
+- context/MenuContext.jsx, menu-context.js, useMenus.js — Menu State/Scoped Requests
+- lib/menu-navigation.js — Validation/Registry/Filtering/Landing
+- components/MenuRoute.jsx, MenuStatus.jsx, pages/Forbidden.jsx — Page Guard/403/Error/Loading
+- components/layout/Sidebar.jsx และ ManagementLayout.jsx — Shared Desktop/Mobile Navigation/Layout
+- hooks/useAdminApi.js และ lib/admin-response.js — Scoped List/Mutation Loading/Errors/Whitelisted State
+- pages/MenuManagement.jsx, RoleManagement.jsx, UserRoleAssignment.jsx — หน้าจัดการจริง
+- AuthContext เพิ่ม sessionVersion เล็กน้อยเพื่อแยก Login Sessions; Promise Dedup/Revision เดิมไม่ถูกลบ
+
+### ผลตรวจและวิธีทดสอบ
+
+Build/Lint ผ่าน; Unit/DOM Tests **122 PASS** รวมของเดิม 100 และ RBAC เพิ่ม 22 Cases Browser **20 Checks PASS** ผ่าน Chrome/React/Express/PostgreSQL จริงบน Disposable DB ไม่ใช่ Mock API; Desktop/Mobile, CRUD/Assign/403/Empty Grants/Self-role Change/Edit Profile/Avatar/Refresh/Logout ผ่าน ไม่พบ JS/Console Error หรือ Unexpected 5xx ในรอบนั้น
+
+คำสั่ง npm run test:rbac:e2e ต้องระบุ RBAC_TEST_DATABASE_URL เป็น Local DB ชื่อ login_rbac_test_* Schema public ต่างจาก backend/.env Application DB และ Deploy Migrations ก่อน ต้องเริ่มว่าง Script เริ่ม Backend/Vite บน Ports ชั่วคราวเอง ใช้ Test Credentials ใน Memory ไม่บันทึก Trace/HAR/Storage State และไม่ทดสอบ Mutation กับ Dev Database
+
+ภาพ QA ใช้ข้อมูล Fixture ที่ลบทิ้งแล้ว: ../docs/rbac/screenshots/menu-management-desktop.png, profile-mobile.png และ rbac-browser-results.json (เฉพาะ Method/Path/Status ไม่มี Headers/Body/Secrets)
+
+การทดสอบด้วยตนเองบน Dev: Login Admin เดิม → เปิดสามหน้าจัดการ → ทดลองกับข้อมูลทดสอบที่ตั้งใจแก้; Login Manager/User ตรวจ Sidebar/URL 403; Refresh/Logout และแก้ Profile ตามสิทธิ์ ข้อมูล Dev ไม่ได้ถูกเปลี่ยนอัตโนมัติในงานนี้ .env/Dependencies ไม่เปลี่ยน และไม่มี Commit/Push
+
+
+## ชื่อบัญชี Dev ล่าสุด — 20 พฤศจิกายน 2026
+
+ชุดข้อมูลลดเหลือ 18 คน: Admin 3 (admin01–03), Manager 5 (manager01–05), User 10 (user01–10) Admin เดิมคือ admin01 และนับรวมในสามคนแล้ว รหัสผ่านปรับตามรูปแบบง่าย/เลขท้ายที่ผู้ใช้กำหนดครบทุกคน ดูไฟล์ Credentials Private ที่เครื่อง ไม่แสดงค่าในรายงาน Refresh หน้าเว็บหนึ่งครั้งเพื่อโหลดรายชื่อ/Username ล่าสุด UI/Routes/Role Menu Grants ไม่เปลี่ยนจากการปรับข้อมูลนี้
+
+
+## Popup สำหรับการจัดการข้อมูล — 20 พฤศจิกายน 2026
+
+ใช้ Dialog/AlertDialog จาก Registry ทางการ shadcn/ui (new-york-v4, แปลง TypeScript เป็น JSX) และ radix-ui ที่ติดตั้งอยู่แล้ว ไม่เพิ่ม Library ใหม่ ครอบฟอร์ม Edit Profile, Change Photo, Add/Edit Menu, Add/Edit Role, Assign Menu และ Edit User Role; การลบและเปลี่ยน Role ตนเองใช้ AlertDialog ยืนยัน
+
+เมื่อ Backend ยืนยันสำเร็จจึงปิด Popup และแจ้งด้วย Sonner เดิม หาก API ผิดพลาดยังเก็บข้อมูลให้แก้/ลองใหม่ ระหว่างส่งห้ามกดซ้ำหรือปิด Popup Cancel ไม่ส่ง Request มี Focus Trap/คืน Focus และ Dialog เลื่อนเนื้อหาได้บนมือถือ
+
+ตามคำขอ ยังไม่เพิ่ม Sonner สี่จุด: Profile validation/อีเมลซ้ำ 409, Menu validation, Role required/code validation และ Avatar validation/preview error ข้อความเดิมยังแสดงอยู่ ปุ่ม Reload navigation ใน Sidebar ถูกนำออกตามอนุมัติ; การโหลดเมนูเมื่อ Login, Window Focus, Check Session และหลังแก้สิทธิ์ยังทำงานเดิม
+
+Build/Lint ผ่าน, Unit/DOM Tests 128 ผ่าน (รันทีละ Worker) และ Chrome E2E 20 Checks ผ่านบนฐานข้อมูลชั่วคราวที่ลบทิ้งหลังทดสอบ ตรวจยืนยันข้อมูล dev ไม่เปลี่ยน ภาพ Popup ตัวอย่างอยู่ใน docs/rbac/screenshots/menu-edit-dialog-desktop.png และ profile-edit-dialog-mobile.png ไม่มีการแก้ Backend, .env หรือ Schema ในรอบ Popup และไม่มี Commit/Push

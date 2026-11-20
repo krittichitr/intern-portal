@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
 
-afterEach(cleanup)
+import { toast } from 'sonner'
+
+afterEach(() => {
+  act(() => { toast.dismiss() })
+  cleanup()
+})

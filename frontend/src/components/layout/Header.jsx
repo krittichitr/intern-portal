@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'
 import { useAuth } from '@/context/useAuth'
 
-export default function Header({ onLogout }) {
+export default function Header({ onLogout, title = 'Dashboard' }) {
   const { user } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   return (
@@ -19,16 +19,16 @@ export default function Header({ onLogout }) {
           </SheetTrigger>
           <SheetContent side="left" className="mobile-sidebar w-[290px] max-w-[90vw] gap-0 p-0">
             <SheetTitle className="sr-only">Workspace navigation</SheetTitle>
-            <SheetDescription className="sr-only">Your dashboard, profile overview, and sign out.</SheetDescription>
+            <SheetDescription className="sr-only">Pages available to your account, and sign out.</SheetDescription>
             <Sidebar onNavigate={() => setMenuOpen(false)} onLogout={onLogout} />
           </SheetContent>
         </Sheet>
-        <span className="header-title">Dashboard</span>
+        <span className="header-title">{title}</span>
       </div>
       <div className="header-profile">
         <div className="header-user-text"><p title={user.username}>{user.username}</p></div>
         <Badge variant="secondary" className="role-badge header-role">{user.role}</Badge>
-        <UserAvatar username={user.username} className="size-9" />
+        <UserAvatar username={user.username} avatarUrl={user.avatarUrl} className="size-9" />
       </div>
     </header>
   )

@@ -8,3 +8,15 @@ const api = axios.create({
 })
 
 export default api
+
+// Avatar paths belong to the backend origin, rather than the API /api prefix.
+export function resolveAvatarUrl(avatarUrl) {
+  if (typeof avatarUrl !== 'string' || !avatarUrl.trim()) return undefined
+  try {
+    const backend = new URL(api.defaults.baseURL, window.location.origin)
+    const image = new URL(avatarUrl, `${backend.origin}/`)
+    return ['http:', 'https:'].includes(image.protocol) ? image.href : undefined
+  } catch {
+    return undefined
+  }
+}

@@ -18,6 +18,15 @@ function Avatar({
   );
 }
 
+function AvatarImage({ className, ...props }) {
+  return (
+    <AvatarPrimitive.Image
+      data-slot="avatar-image"
+      className={cn("size-full object-cover", className)}
+      {...props} />
+  );
+}
+
 function AvatarFallback({
   className,
   ...props
@@ -35,5 +44,6 @@ function AvatarFallback({
 
 export {
   Avatar,
+  AvatarImage,
   AvatarFallback,
 }

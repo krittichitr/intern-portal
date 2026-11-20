@@ -40,11 +40,13 @@ export default function Login() {
     try {
       await login(username, password)
       setPassword('')
-      navigate('/dashboard', { replace: true })
+      navigate('/', { replace: true })
     } catch (error) {
       const status = error.response?.status
       setSubmitError(status === 401
         ? 'That username and password don’t match. Please try again.'
+        : status === 403 && error.response?.data?.code === 'RBAC_NOT_READY'
+          ? 'Your account role isn’t configured. Contact an administrator.'
         : status === 400
           ? 'Check your username and password, then try again.'
           : status === 429

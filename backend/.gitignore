@@ -9,3 +9,9 @@ node_modules
 *.key
 *.log
 coverage/
+
+# User-uploaded profile images
+/uploads/avatars/
+
+# Local development seed credentials (never commit passwords)
+/.local/

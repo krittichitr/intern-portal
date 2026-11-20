@@ -16,4 +16,52 @@ model users {
   is_active     Boolean  @default(true)
   created_at    DateTime @default(now())
   updated_at    DateTime
+  first_name    String?  @db.VarChar(100)
+  last_name     String?  @db.VarChar(100)
+  phone         String?  @db.VarChar(20)
+  avatar_url    String?  @db.Text
+
+  // Nullable during backfill; keep the legacy role until authentication cutover.
+  role_id     String? @db.Uuid
+  role_record roles?  @relation(fields: [role_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([role_id])
+}
+
+model roles {
+  id         String       @id @default(uuid()) @db.Uuid
+  code       String       @unique @db.VarChar(20)
+  name       String       @db.VarChar(100)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  users      users[]
+  grants     role_menus[]
+}
+
+model menus {
+  id         String       @id @default(uuid()) @db.Uuid
+  menu_name  String       @db.VarChar(100)
+  menu_path  String?      @unique @db.VarChar(255)
+  menu_icon  String?      @db.VarChar(64)
+  parent_id  String?      @db.Uuid
+  sort_order Int          @default(0)
+  is_active  Boolean      @default(true)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+
+  parent   menus?       @relation("MenuHierarchy", fields: [parent_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children menus[]      @relation("MenuHierarchy")
+  grants   role_menus[]
+
+  @@index([parent_id, sort_order, id])
+}
+
+model role_menus {
+  role_id String @db.Uuid
+  menu_id String @db.Uuid
+  role    roles  @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  menu    menus  @relation(fields: [menu_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([role_id, menu_id])
+  @@index([menu_id])
 }

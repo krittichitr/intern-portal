@@ -20,4 +20,15 @@ export const cookieOptions = {
   path: "/",
 };
 export const tokenLifetimeMs = 60 * 60 * 1000;
-export const publicUserSelect = { id: true, username: true, email: true, role: true };
+export const publicUserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  role: true,
+  role_record: { select: { id: true, code: true } },
+
+  first_name: true,
+  last_name: true,
+  phone: true,
+  avatar_url: true,
+};

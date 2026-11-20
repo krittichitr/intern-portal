@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { config, publicUserSelect } from "../config.js";
+import { hasConfiguredRole, roleNotReady } from "../lib/public-user.js";
 
 const unauthorized = (res) => res.status(401).json({ success: false, message: "Unauthorized" });
 export async function requireAuth(req, res, next) {
@@ -22,7 +23,9 @@ export async function requireAuth(req, res, next) {
     select: { ...publicUserSelect, is_active: true },
   });
   if (!user || !user.is_active) return unauthorized(res);
+  if (!hasConfiguredRole(user)) return roleNotReady(res);
   const { is_active, ...publicUser } = user;
-  req.user = publicUser;
+  // Downstream code receives the current DB role, never the legacy authority.
+  req.user = { ...publicUser, role: user.role_record.code };
   next();
 }

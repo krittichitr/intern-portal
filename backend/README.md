@@ -127,6 +127,108 @@ Tests สร้างบัญชีสุ่มเฉพาะชุดทด�
 
 รัน `node --test test/server.integration.test.js` เพื่อตรวจ startup/shutdown, safe error handling และ production cookie configuration โดยไม่เขียนข้อมูลลงฐานข้อมูล
 
-`npm test` ยังคงเก็บชุด integration ที่สร้าง/ลบ fixture ของตัวเองไว้สำหรับฐานข้อมูลทดสอบ ไม่รันชุดนี้ระหว่าง cleanup เพื่อรักษาข้อกำหนดไม่แก้ Database
+อัปเดต 20 พฤศจิกายน 2026: Real DB Integration Suites ต้องระบุ `RBAC_TEST_DATABASE_URL` เป็น Local PostgreSQL ฐานข้อมูลแยกชื่อ `login_rbac_test_*`, Schema public และต่างจาก Application DB ก่อนเชื่อมต่อ หากไม่ระบุจะ Skip; ชุด Profile/Avatar Mock ใช้ Connection จำลองและ Storage ชั่วคราว ข้อความผลทดสอบก่อน Cleanup ด้านบนเป็นประวัติเดิม ไม่ใช่แนวทางรัน Tests ปัจจุบัน
 
 ลบ seed script ที่เลิกใช้และ Prisma output เก่าที่ไม่มี import แล้ว ปัจจุบัน client ใช้ `@prisma/client` จาก `node_modules` ตาม generator เดิม ไม่แก้ schema หรือ auth source
+
+## ข้อมูล Dev หลาย Role — 20 พฤศจิกายน 2026
+
+ขณะนี้มี Schema RBAC และสคริปต์แยกสำหรับ Role Bootstrap กับข้อมูล User ทดสอบ (ยังไม่ใช่ Menu/Role Management APIs):
+
+```sh
+npm run rbac:roles:check   # ตรวจ Mapping แบบ Read Only
+npm run rbac:roles:apply   # สร้าง Roles ที่ขาด/เชื่อม User เดิม
+npm run rbac:users:check   # ตรวจแผนผู้ใช้ทดสอบ 18 คน ไม่สร้างไฟล์รหัสผ่าน
+npm run rbac:users:seed    # เพิ่มเฉพาะบัญชีที่ขาด ไม่ Reset บัญชีเดิม
+```
+
+ข้อมูล Dev ล่าสุดรวม ADMIN 3 / MANAGER 5 / USER 10 (18 คนรวม Admin เดิมเป็น admin01) ใช้ชื่อ admin01–03, manager01–05, user01–10 รหัสผ่านตามเลขท้ายที่ผู้ใช้กำหนดดูใน `.local/dev-seed-credentials.json` ที่เครื่องเท่านั้น (Directory 700/File 600/Git Ignore) ไม่ใส่รหัสผ่านใน README หรือแก้ `.env` และอย่าลบไฟล์นี้หากยังต้องการ Login ด้วยรหัสผ่านเริ่มต้นของชุด Seed
+
+Tests ใหม่ `npm run test:rbac:backfill` และ `npm run test:rbac:seed` ต้องกำหนด RBAC_TEST_DATABASE_URL เป็น Local/public-schema DB แยกที่ชื่อขึ้นต้น login_rbac_test_ และเริ่มต้นว่าง/มี Migrations แล้ว Integration จะ Skip เมื่อไม่ตั้งตัวแปร และปฏิเสธ Target ที่ไม่ตรง Guard; ห้ามตั้งเป็น DB Application รายละเอียดผลตรวจและขั้นตอนที่เสร็จแล้วอยู่ใน `../docs/rbac/PHASE1_DATABASE_DESIGN.md` หัวข้อ 13–16
+
+
+## Authentication กับ Role Relation — C1–C2
+
+Login/Me/Profile/Avatar คืน `user.role` เป็น String จาก `users.role_id → roles.code` ใช้ Public DTO ร่วมใน `src/lib/public-user.js` ไม่มี Legacy Role Fallback JWT/Cookie/Logout ใช้รูปแบบเดิม และ requireAuth อ่าน Role ปัจจุบันจาก DB ทุก Request
+
+บัญชีที่ Credentials/Active ผ่านแต่ยังไม่เชื่อม Role จะได้ **403** พร้อม `code: RBAC_NOT_READY` และข้อความให้ติดต่อผู้ดูแล Login ไม่ออก Cookie ใหม่ในกรณีนี้ ต่างจาก Credentials/JWT/User Active ไม่ผ่านที่ได้ 401 Profile/Avatar ใช้ Transaction เพื่อไม่ Commit หาก Role หายระหว่าง Update
+
+รัน `npm run test:auth:roles` กับ `RBAC_TEST_DATABASE_URL` ตามข้อกำหนดด้านบน โดย Deploy Migrations บน DB ทดสอบแยกก่อน Suite ใหม่ต้องเริ่มด้วย users/roles ว่าง ผลวันที่ 20 พ.ย. 2026: Auth จริง 25 PASS, Profile/Avatar/Server Mock 42 PASS; Dev HTTP Smoke ครบ 3 Roles และข้อมูล Dev 31 คนไม่เปลี่ยน ยังไม่มี requireAdmin หรือ Menu Authorization ในรอบนี้
+
+
+## Admin Guard — C3
+
+`src/middleware/authorization.middleware.js` export `requireAdmin` ใช้หลัง `requireAuth` เสมอ ตัวอย่างลำดับสำหรับ Routes จัดการในขั้นถัดไป: `requireAuth → requireAdmin → Menu Grant Guard → Controller` requireAuth อ่าน Role Relation ล่าสุดจาก DB แล้ว requireAdmin ตรวจ `req.user.role_record.code === 'ADMIN'` โดยไม่อ่าน DB ซ้ำหรือเชื่อ Role ที่ส่งจาก Client
+
+ไม่มี req.user ตอบ 401; Mapping ไม่พร้อมตอบ 403/RBAC_NOT_READY; Role อื่นตอบ 403/Forbidden; ADMIN เรียก next() ไม่มี Implicit Menu Bypass และไม่ติด requireAdmin บน Profile API ของผู้ใช้ทั่วไป ยังไม่มี Production Management Routes/Probe Endpoint ใน C3
+
+`npm run test:auth:admin` ผ่าน 18 Tests (17 Subtests + Parent Test), 0 FAIL/0 SKIP ใช้ HTTP/JWT จริงกับ Mock Prisma และ Connection จำลองที่ใช้ไม่ได้ ไม่อ่าน/เขียน DB จริง ครอบคลุม Client Spoofing และการเปลี่ยน Role โดยใช้ JWT เดิม ไม่ใช่ Browser หรือ Real PostgreSQL Integration Test ของ C3
+
+
+## Menu Bootstrap และ Access Policy — C4
+
+```sh
+npm run rbac:menus:check  # Read-only plan; default dry run
+npm run rbac:menus:seed   # Local Dev bootstrap; transaction; ไม่ reset grants เดิม
+npm run test:rbac:menus   # Policy Mock + real DB suite ที่ต้องระบุ RBAC_TEST_DATABASE_URL
+```
+
+Dev Seed แล้ว 6 Menus/9 Grants: Dashboard/Profile ให้ ADMIN/MANAGER/USER; กลุ่ม System Management ไม่มี Path และมีสามลูก /admin/menus, /admin/roles, /admin/users ให้ ADMIN เท่านั้น หน้าจัดการทั้งสามยังไม่สร้าง Registry IDs/Paths อยู่ใน src/lib/menu-registry.js
+
+Seed ต้องมี Roles เริ่มต้นและ Active ADMIN; ถ้า Menu Data เดิมขัด ID/Path หรือไม่ครบจะหยุด ไม่ overwrite คำสั่งรันซ้ำไม่ reset ชื่อ/Active/Sort/สิทธิ์ธรรมดาที่แก้ไว้ Critical Access ไม่พร้อมจะแจ้งปัญหา ไม่ซ่อมเงียบ ๆ การ Apply ใช้ Serializable + Locks/Retry ทั้ง Menus/Grants ไม่มี User/Role Updates
+
+src/services/menu-access.service.js สร้าง tree/allowedPaths ตาม Direct Grants + Active Ancestors เรียง Sort Order/ID; Group ที่ไม่มีสิทธิ์คลิกมี menuPath null ไม่มี Inheritance/Admin Bypass getUserMenuAccess อ่าน User/Role/Grants/Menus ใน Read-only Snapshot เดียว User หาย/Inactive ได้ 401, Mapping หายได้ 403/RBAC_NOT_READY, ไม่มี Grant ได้ Snapshot ว่าง
+
+requireMenuAccess(fixedPath) รับ Path ฝั่ง Server และวางหลัง requireAuth; Management ต้องใช้ requireAdmin ด้วย ใน C4 เตรียม Guard/Service แต่ยังไม่ติดบน Profile หรือสร้าง Production Menu Endpoint จึงยังไม่ใช่ RBAC ที่ใช้งานครบทั้งระบบ
+
+ผล 20 พ.ย. 2026: Policy Mock 16 PASS, Bootstrap/PostgreSQL แยก 11 PASS, Auth/PostgreSQL แยก 25 PASS; Mock Regression รวม Admin/Menu/Profile/Avatar/Server 76 PASS (รวม 16 ข้างต้นแล้ว) ทุกชุด 0 FAIL/0 SKIP Real DB tests ต้องใช้ Local login_rbac_test_* แยกจาก Application DB และ Suite Bootstrap ต้องเริ่มว่าง ไม่ใช้ auth_db Dev เป็น Fixture DB ตรวจ Dev users/roles Fingerprint ไม่เปลี่ยน Users 31 คน; Seed ซ้ำไม่เขียนเพิ่ม รายละเอียด docs/rbac/PHASE1_DATABASE_DESIGN.md หัวข้อ 19
+
+
+## Current User Menus API — C5
+
+เปิด `GET /api/me/menus` แล้ว ใช้ requireAuth ทุก Role ที่ Active/Mapping พร้อม คืน `{ success: true, menus, allowedPaths }` จาก Menu Policy เดิม ไม่มี Grants ได้ 200 Empty ไม่ Logout ไม่มี JWT/Inactive ได้ 401, Mapping ไม่พร้อมได้ 403/RBAC_NOT_READY, DB Error ได้ safe 500 ทุก Response ตั้ง no-store และไม่ออก Cookie ใหม่ รายละเอียด Contract/ไฟล์/Tests อยู่ [ME_MENUS_API.md](ME_MENUS_API.md)
+
+`npm run test:api:my-menus` รัน API Mock + Real DB Suite (ต้องกำหนด RBAC_TEST_DATABASE_URL ฐานแยกที่ Guard แล้วและ Deploy Migrations; ไม่ระบุจะ Skip Real DB) ผลรอบนี้ API Mock 17 PASS / PostgreSQL แยก 8 PASS รวม Mock Regression 93 PASS และ Auth/PostgreSQL 25 PASS, Bootstrap/PostgreSQL 11 PASS ยังไม่เชื่อม Dynamic Sidebar/Frontend Route Guard หรือ Management CRUD APIs
+
+
+## Menu Management Backend — C6
+
+เปิด GET/POST /api/menus และ PUT/DELETE /api/menus/:id แล้ว ทุกเส้นตรวจ JWT + ADMIN + /admin/menus Direct Grant/Active Ancestors GET คืน Flat List รวม Inactive ส่วน Mutation ตรวจ Hierarchy/Path/Delete Dependencies/Critical Access พร้อม Serializable Transaction/Locks/Retry และ Recheck Actor ก่อนเขียน ดู Request/Response/Error Contract และ Tests ที่ [MENU_API.md](MENU_API.md)
+
+รัน `npm run test:api:menus` เฉพาะ Disposable PostgreSQL ผ่าน RBAC_TEST_DATABASE_URL ตาม Guard เดิม หากไม่ระบุจะ Skip ผลรอบนี้ CRUD/PostgreSQL แยก 15 PASS พร้อม Regression My Menus 8/Bootstrap 11/Auth 25 บน DB แยก และ Mock Regression 93 PASS ไม่เขียน Mutation ลง Dev ยังไม่มี Menu Management UI หรือ Role/Assignment APIs
+
+
+## Role Management / Assign Menu — C7
+
+เปิด API Role ตาม Assignment ครบหกเส้น: GET/POST /api/roles, PUT/DELETE /api/roles/:id, GET/PUT /api/roles/:id/menus ใช้ JWT + ADMIN + Role Management Direct Menu Grant ทั้งหมด ห้ามลบ Role ที่มี User รวม Inactive และ Assign เป็น Atomic Replace ของ menuIds โดยไม่มี Permission รายคำสั่ง/รายปุ่ม ไม่มี Multiple Roles/Org Group/Audit Log
+
+ดู Contract/Statuses/Source/Tests ที่ [ROLE_API.md](ROLE_API.md) รัน `npm run test:api:roles` โดยระบุ RBAC_TEST_DATABASE_URL เป็น Disposable Local DB ชื่อ login_rbac_test_* Schema public ต่างจาก App และ Deploy Migrations ก่อน Suite ต้องเริ่มว่าง; ไม่ระบุจะ Skip ผล C7 PostgreSQL แยก 17 PASS พร้อม Menu CRUD 15/My Menus 8/Bootstrap 11/Auth 25 และ Mock Regression 93 PASS ไม่ทำ Mutation ใน Dev ข้อมูล Dev สี่ตารางคงเดิม
+
+ยังไม่มี User Role Assignment API/UI, Management UI หรือ Dynamic Sidebar Scope Audit ล่าสุดอยู่ docs/rbac/PHASE1_DATABASE_DESIGN.md หัวข้อ 22
+
+
+## User Role Assignment — C8
+
+เปิด PUT /api/users/:id/role ตาม Module 3 แล้ว รับ `{ roleId }` UUID เดียว ใช้ JWT + ADMIN + /admin/users Direct Grant/Active Ancestors เปลี่ยนเฉพาะ Target Role และคง Profile/Password/Active เดิม ใช้ Shared Public User DTO ไม่ออก JWT/Cookie ใหม่ Same JWT อ่าน Role ล่าสุดใน Request ถัดไป ป้องกัน Last Active Admin ตามข้อตกลงเดิมใน Serializable Transaction/Locks/Retry
+
+Contract/Errors/Source/Tests อยู่ [USER_ROLE_API.md](USER_ROLE_API.md) รัน `npm run test:api:user-role` ด้วย RBAC_TEST_DATABASE_URL ฐานทดสอบแยกที่ Guard แล้วและ Deploy Migrations (ต้องเริ่มว่าง; ไม่ระบุจะ Skip) ผล User Role/PostgreSQL 14 PASS พร้อม Regression Role 17/Menu 15/My Menus 8/Bootstrap 11/Auth 25 บน DB แยก และ Mock Regression 93 PASS ไม่มี Dev Role Changes
+
+Backend APIs บังคับ 12 เส้นครบ แต่ Frontend Management/Dynamic Sidebar/403 และ Final DB Cutover ยังเหลือ ไม่เพิ่ม GET Users/Create/Delete User หรือ Feature Out of Scope ใน C8
+
+
+## เชื่อม Frontend RBAC — 20 พฤศจิกายน 2026
+
+เพิ่มเฉพาะ Supporting GET /api/users แบบ Pagination/Admin + /admin/users Grant ตาม D005 เพื่อใช้ User Picker (DTO 6 Fields, Read-only Snapshot) ไม่มี User Create/Delete/Activation และเชื่อม /profile Menu Guard ก่อน PATCH Controller/Avatar Multer แล้ว Me/Logout/รูป Public ไม่ผูก Grant ดู Contract ล่าสุดใน USER_ROLE_API.md, PROFILE_API.md, AVATAR_API.md
+
+Regression บน PostgreSQL แยก: User Role/Picker 15, Role 17, Menu 15, My Menus 8, Bootstrap 11, Auth/Profile 26 Tests ผ่านทั้งหมด; Mock Regression 93 ผ่าน Frontend Chrome E2E อีก 20 Checks ใช้ฐานแยก/Temp Avatar Storage ไม่เปลี่ยนข้อมูล Dev สี่ตาราง
+
+
+## ปรับชุด Dev ให้เรียบง่าย — 20 พฤศจิกายน 2026
+
+ลดจาก 31 เป็น 18 คนตามคำขอ ลบเฉพาะ Seed ส่วนเกิน 13 คน Admin เดิมรวมใน 3 คนและเปลี่ยนชื่อเป็น admin01; อีกสองคน admin02/admin03 Manager 5 และ User 10 เรียงเลขสองหลัก บัญชีที่เก็บไว้คง ID/Profile/Active/Email เดิมของ Original Admin; Email ของ Seed ใช้ชื่อใหม่@example.invalid ไม่มี Role/Menu/Grant Changes
+
+ผู้ใช้ขอเปลี่ยนรหัสผ่าน Dev ภายหลัง จึงอัปเดต Hash ของทั้ง 18 บัญชีตามรูปแบบและเลขท้ายที่กำหนด รวม Admin เดิมด้วย bcrypt Cost 12 ไม่พิมพ์ Plaintext/Hash/JWT/Cookie ใน Logs เอกสารนี้ไม่เก็บ Password Values ไฟล์ .local/dev-seed-credentials.json อัปเดตชื่อใหม่/รหัสใหม่แบบ Private 600; admin01 มี existingOnly เพื่อไม่ให้ Seed สร้างบัญชีเดิมใหม่หาก ID หาย
+
+devUserPlan เปลี่ยนเป็น 18 คน ชื่อใหม่/รหัส Dev ตามคำขอ ใช้เฉพาะ Dev Guard เดิมปฏิเสธ Production การ Seed ซ้ำยังรักษาข้อมูล/รหัสผ่านที่มีอยู่ ไม่ใช่คำสั่ง Reset/Delete Accounts เมื่อข้อมูลเคยถูกแก้ภายหลัง Migration ลดจำนวนทำครั้งเดียวตามคำขอนี้
+
+Seed Tests 10 PASS บน DB แยก และทดสอบ Resize 31→18/Preserved Fields/Rerun Zero บน DB แยกก่อน Apply Dev จากนั้นตรวจ Login/Me/Logout ครบ 18 บัญชี ไม่แก้ .env/Schema/Frontend และไม่ Commit/Push ข้อความจำนวน 31 ในรายงาน Phase ก่อนหน้านี้เป็นประวัติก่อนปรับชุดข้อมูล

@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { config, cookieOptions, publicUserSelect, tokenLifetimeMs } from "../config.js";
+import { hasConfiguredRole, roleNotReady, toPublicUser } from "../lib/public-user.js";
 
 export async function login(req, res) {
   const { username, password } = req.body || {};
@@ -19,18 +20,21 @@ export async function login(req, res) {
   if (!user || !user.is_active || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ success: false, message: "Invalid username or password" });
   }
+  if (!hasConfiguredRole(user)) return roleNotReady(res);
   const token = jwt.sign({}, config.jwtSecret, {
     subject: user.id, expiresIn: "1h", algorithm: "HS256",
   });
   res.cookie("auth_token", token, { ...cookieOptions, maxAge: tokenLifetimeMs });
-  const { id, username: name, email, role } = user;
   return res.status(200).json({
     success: true, message: "Login successful",
-    user: { id, username: name, email, role },
+    user: toPublicUser(user),
   });
 }
 export function getMe(req, res) {
-  return res.status(200).json({ success: true, user: req.user });
+  return res.status(200).json({
+    success: true,
+    user: toPublicUser(req.user),
+  });
 }
 export function logout(req, res) {
   res.clearCookie("auth_token", cookieOptions);

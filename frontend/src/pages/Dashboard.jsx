@@ -9,10 +9,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useMenus } from '@/context/useMenus'
 import { useAuth } from '@/context/useAuth'
 
 export default function Dashboard() {
   const { user, logout, isLoggingOut, checkAuth, isChecking, lastCheckedAt } = useAuth()
+  const { refreshMenus } = useMenus()
   const navigate = useNavigate()
   const [logoutError, setLogoutError] = useState('')
 
@@ -51,7 +53,7 @@ export default function Dashboard() {
               <CardHeader className="detail-card-heading"><div className="card-heading-icon"><UserRound size={19} /></div><div><CardTitle className="card-heading-title"><h2>Profile information</h2></CardTitle><CardDescription>Your account details.</CardDescription></div></CardHeader>
               <Separator />
               <CardContent className="profile-card-content">
-                <div className="profile-identity"><UserAvatar username={user.username} className="size-16 rounded-2xl text-xl" /><div className="min-w-0"><h3>{user.username}</h3><p>{user.email}</p><Badge variant="secondary" className="role-badge">{user.role}</Badge></div></div>
+                <div className="profile-identity"><UserAvatar username={user.username} avatarUrl={user.avatarUrl} className="size-16 rounded-2xl text-xl" /><div className="min-w-0"><h3>{user.username}</h3><p>{user.email}</p><Badge variant="secondary" className="role-badge">{user.role}</Badge></div></div>
                 <dl className="profile-details">
                   <div><dt><UserRound size={15} /> Username</dt><dd>{user.username}</dd></div>
                   <div><dt><Mail size={15} /> Email address</dt><dd>{user.email}</dd></div>
@@ -67,7 +69,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="session-verified"><span className="verified-icon"><ShieldCheck size={27} strokeWidth={1.6} /></span><div><h3>Session verified</h3><p>You’re signed in to your account.</p></div><span className="status-dot" /></div>
                   <dl className="session-details"><div><dt>Authentication</dt><dd className="text-emerald-700"><span className="status-dot" /> Verified</dd></div><div><dt>Last checked</dt><dd>{checkedTime || 'Just now'}</dd></div></dl>
-                  <Button variant="outline" onClick={() => void checkAuth()} disabled={isChecking || isLoggingOut} className="session-check"><RefreshCw size={15} className={isChecking ? 'animate-spin' : ''} />{isChecking ? 'Checking your session…' : 'Check session'}</Button>
+                  <Button variant="outline" onClick={async () => { await checkAuth(); await refreshMenus() }} disabled={isChecking || isLoggingOut} className="session-check"><RefreshCw size={15} className={isChecking ? 'animate-spin' : ''} />{isChecking ? 'Checking your session…' : 'Check session'}</Button>
                 </CardContent>
               </Card>
               <div className="signout-section"><Button variant="outline" onClick={handleLogout} disabled={isLoggingOut} className="signout-action">{isLoggingOut ? <LoaderCircle className="animate-spin" /> : null}{isLoggingOut ? 'Signing out…' : 'Sign out of workspace'}</Button></div>

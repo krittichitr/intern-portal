@@ -188,3 +188,37 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Management uses the existing dashboard shell and simple native controls. */
+.sidebar-nav { overflow-y: auto; min-height: 0; }
+.sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+.sidebar-nav .sidebar-submenu { margin: 3px 0 6px 14px; padding-left: 8px; border-left: 1px solid #334057; }
+.sidebar-group-label { display: flex; align-items: center; gap: 10px; color: #9ca9bd; padding: 12px 14px 7px; font-size: 13px; }
+.management-panel { background: white; border: 1px solid #e3e8ef; border-radius: 10px; margin-top: 20px; }
+.management-form { padding: 22px; }
+.management-form h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.management-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+.management-fields label { margin-bottom: 7px; }
+.management-panel select { min-width: 140px; width: 100%; border: 1px solid #d4dbe5; border-radius: 6px; background: white; padding: 9px 12px; color: #202939; font-size: 14px; }
+.management-panel select:focus { outline: 2px solid #3563dc; outline-offset: 2px; }
+.management-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 0; }
+.table-scroll { overflow-x: auto; }
+.management-panel table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.management-panel th, .management-panel td { padding: 14px 18px; border-bottom: 1px solid #e8ecf1; vertical-align: middle; }
+.management-panel th { background: #fafbfc; color: #5c687a; font-weight: 500; white-space: nowrap; }
+.management-panel td { overflow-wrap: anywhere; }
+.management-panel tbody tr:last-child td { border-bottom: 0; }
+.table-actions { display: flex; gap: 8px; align-items: center; }
+.table-actions select { width: auto; max-width: 250px; }
+.management-check { display: flex; align-items: center; gap: 9px; font-size: 14px; padding: 8px 0; }
+.management-check input { width: 17px; height: 17px; accent-color: #3563dc; flex-shrink: 0; }
+.management-check small, .management-hint { color: #697586; font-size: 13px; }
+.assignment-list { display: grid; gap: 3px; margin: 15px 0; }
+.management-pagination { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 18px; font-size: 14px; }
+@media (max-width: 639px) { .management-fields { grid-template-columns: 1fr; } .management-form { padding: 16px; } .management-pagination { flex-wrap: wrap; } }
+
+.app-form-dialog .dialog-form { min-width: 0; }
+.dialog-form select { width: 100%; min-width: 0; border: 1px solid #d4dbe5; border-radius: 6px; background: white; padding: 9px 12px; font-size: 14px; }
+.dialog-form select:focus { outline: 2px solid #3563dc; outline-offset: 2px; }
+.app-form-dialog .assignment-list { max-height: 42svh; overflow-y: auto; }
+.app-form-dialog .management-actions { justify-content: flex-end; }
