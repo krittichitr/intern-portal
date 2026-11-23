@@ -1,3 +1,5 @@
+import { menuIconNames } from '../lib/menu-icons.js';
+
 export class MenuError extends Error {
   constructor(status, code, message) { super(message); this.name = 'MenuError'; this.status = status; this.code = code; }
 }
@@ -32,7 +34,7 @@ export function readMenuInput(body, { create = false } = {}) {
   }
   if (Object.hasOwn(body, 'menuIcon')) {
     const icon = body.menuIcon;
-    if (icon !== null && (typeof icon !== 'string' || icon.length > 64 || !/^[A-Za-z][A-Za-z0-9]*$/.test(icon))) invalid('menuIcon');
+    if (icon !== null && !menuIconNames.includes(icon)) invalid('menuIcon');
     data.menu_icon = icon;
   }
   if (Object.hasOwn(body, 'parentId')) data.parent_id = body.parentId === null ? null : menuId(body.parentId);

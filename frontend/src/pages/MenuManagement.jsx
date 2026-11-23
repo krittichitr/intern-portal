@@ -9,6 +9,8 @@ import { useMenus } from '@/context/useMenus'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { menuIcons, menuIconNames } from '@/lib/menu-icons'
 
 const blank = { menuName: '', menuPath: '', menuIcon: '', parentId: '', sortOrder: 0, isActive: true }
 export default function MenuManagement() {
@@ -28,19 +30,30 @@ export default function MenuManagement() {
     const order = Number(form.sortOrder)
     if (!form.menuName.trim() || !Number.isInteger(order) || order < 0 || order > 2147483647) { setValidation('Enter a menu name and a valid non-negative sort order.'); return }
     if (form.menuPath && !/^\/(?:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)?$/.test(form.menuPath)) { setValidation('Use an internal path such as /reports without spaces, query or trailing slash.'); return }
+    if (form.menuIcon && !menuIconNames.includes(form.menuIcon)) { setValidation('Choose a supported icon before saving.'); return }
     const body = { menuName: form.menuName.trim(), menuPath: form.menuPath || null, menuIcon: form.menuIcon || null, parentId: form.parentId || null, sortOrder: order, isActive: form.isActive }
     void mutation.run(() => editing === 'new' ? api.post('/menus', body) : api.put(`/menus/${editing}`, body), saved, 'Menu saved.')
   }
   return <ManagementLayout title="Menu Management" description="Manage menu details, hierarchy and availability.">
     <div className="management-actions"><Button onClick={() => begin(null)} disabled={mutation.busy}>Add menu</Button></div>
     <ResourceStatus resource={resource} />
+    <p className="mb-4 text-sm text-muted-foreground">System management menus must remain available. Before deleting other menus, move their children and remove their role assignments.</p>
     <FormDialog open={Boolean(editing)} onOpenChange={(open) => { if (!open) setEditing(null) }} title={editing === 'new' ? 'Add menu' : 'Edit menu'} description="Set menu details and availability." busy={mutation.busy}>
       <form onSubmit={submit} className="dialog-form" aria-label={editing === 'new' ? 'Add menu' : 'Edit menu'}>
       <fieldset disabled={mutation.busy}>
         <div className="management-fields">
           <div><Label htmlFor="menu-name">Menu name</Label><Input id="menu-name" required maxLength={100} value={form.menuName} onChange={(e) => change('menuName', e.target.value)} /></div>
           <div><Label htmlFor="menu-path">Menu path (blank for group)</Label><Input id="menu-path" maxLength={255} placeholder="/reports" value={form.menuPath} onChange={(e) => change('menuPath', e.target.value)} /></div>
-          <div><Label htmlFor="menu-icon">Icon name</Label><Input id="menu-icon" maxLength={64} placeholder="FileText" value={form.menuIcon} onChange={(e) => change('menuIcon', e.target.value)} /></div>
+          <div><Label htmlFor="menu-icon">Icon</Label>
+            <Select value={form.menuIcon || 'none'} onValueChange={(value) => change('menuIcon', value === 'none' ? '' : value)} disabled={mutation.busy}>
+              <SelectTrigger id="menu-icon" className="w-full"><SelectValue placeholder="Choose icon" /></SelectTrigger>
+              <SelectContent><SelectItem value="none">None (default folder)</SelectItem>
+                {form.menuIcon && !menuIconNames.includes(form.menuIcon) && <SelectItem value={form.menuIcon} disabled>Unsupported: {form.menuIcon}</SelectItem>}
+                {menuIconNames.map((name) => { const Icon = menuIcons[name]; return <SelectItem key={name} value={name}><Icon size={16} aria-hidden="true" /><span>{name}</span></SelectItem> })}
+              </SelectContent>
+            </Select>
+
+          </div>
           <div><Label htmlFor="menu-parent">Parent menu</Label><select id="menu-parent" value={form.parentId} onChange={(e) => change('parentId', e.target.value)}><option value="">None (root menu)</option>{menus.filter((m) => !descendants.has(m.id)).map((m) => <option value={m.id} key={m.id}>{m.menuName}{!m.isActive ? ' (inactive)' : ''}</option>)}</select></div>
           <div><Label htmlFor="menu-order">Sort order</Label><Input id="menu-order" type="number" required min="0" max="2147483647" step="1" value={form.sortOrder} onChange={(e) => change('sortOrder', e.target.value)} /></div>
           <label className="management-check"><input type="checkbox" checked={form.isActive} onChange={(e) => change('isActive', e.target.checked)} /> Active</label>

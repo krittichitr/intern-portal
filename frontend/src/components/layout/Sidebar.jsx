@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router'
-import { LayoutDashboard, LoaderCircle, LogOut, UserRound, Folder, FileText, ListTree, ShieldCheck, Users, Settings } from 'lucide-react'
+import { LoaderCircle, LogOut, Folder } from 'lucide-react'
 import Brand from '@/components/Brand'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/ui/button'
@@ -8,10 +8,10 @@ import { useAuth } from '@/context/useAuth'
 import { cn } from '@/lib/utils'
 import { useMenus } from '@/context/useMenus'
 import { navigationMenus } from '@/lib/menu-navigation'
+import { menuIcons } from '@/lib/menu-icons'
 
-const icons = { LayoutDashboard, UserRound, FileText, ListTree, ShieldCheck, Users, Settings }
 function MenuItem({ node, onNavigate }) {
-  const Icon = icons[node.menuIcon] || Folder
+  const Icon = Object.hasOwn(menuIcons, node.menuIcon) ? menuIcons[node.menuIcon] : Folder
   return <li>
     {node.canAccess ? <NavLink to={node.menuPath} end onClick={onNavigate} className={({ isActive }) => cn('sidebar-link', isActive && 'active')}><Icon size={19} strokeWidth={1.8} /><span>{node.menuName}</span></NavLink>
       : <div className="sidebar-group-label"><Icon size={18} /><span>{node.menuName}</span></div>}

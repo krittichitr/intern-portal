@@ -52,6 +52,7 @@ export default function RoleManagement() {
   return <ManagementLayout title="Role Management" description="Manage roles and the menus each role may access.">
     <div className="management-actions"><Button disabled={mutation.busy} onClick={() => begin(null)}>Add role</Button></div>
     <ResourceStatus resource={resource} /><ResourceStatus resource={menuResource} />
+    <p className="mb-4 text-sm text-muted-foreground">ADMIN cannot be deleted. Other roles can be deleted only when no users, including inactive users, are assigned.</p>
     <FormDialog open={Boolean(editing)} onOpenChange={(open) => { if (!open) setEditing(null) }} title={editing === 'new' ? 'Add role' : 'Edit role'} description="Set the role name. A role code cannot be changed after creation." busy={mutation.busy}>
       <form className="dialog-form" aria-label={editing === 'new' ? 'Add role' : 'Edit role'} onSubmit={submit}>
       <fieldset disabled={mutation.busy}><div className="management-fields">

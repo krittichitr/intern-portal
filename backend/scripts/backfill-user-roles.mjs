@@ -33,7 +33,9 @@ export async function backfillUserRoles(prisma, { apply = false } = {}) {
         const roles = await tx.roles.findMany({ select: { id: true, code: true } });
         const byId = new Map(roles.map((role) => [role.id, role.code]));
         const byCode = new Map(roles.map((role) => [role.code, role.id]));
-        const users = await tx.users.findMany({ select: { id: true, role: true, role_id: true } });
+        // Raw reads keep this upgrade tool compatible with the pre-cutover DB,
+        // where role_id can still be null despite the final Prisma model.
+        const users = await tx.$queryRaw`SELECT "id", "role", "role_id" FROM "users"`;
 
         if (users.some(({ role }) => !knownCodes.has(role))) {
           throw new RoleBackfillError('UNKNOWN_LEGACY_ROLE', 'Unknown legacy role found. Review the role mapping before applying.');
@@ -62,14 +64,13 @@ export async function backfillUserRoles(prisma, { apply = false } = {}) {
           summary.rolesCreated.push(data.code);
         }
         for (const { code } of definitions) {
-          const result = await tx.users.updateMany({
-            where: { role: code, role_id: null },
-            // Data backfill intentionally preserves all legacy fields/timestamps.
-            data: { role_id: byCode.get(code) },
-          });
-          summary.usersLinked += result.count;
+          // Preserve all legacy fields/timestamps; parameterize both values.
+          summary.usersLinked += await tx.$executeRaw`
+            UPDATE "users" SET "role_id" = ${byCode.get(code)}::uuid
+            WHERE "role" = ${code} AND "role_id" IS NULL`;
         }
-        if (summary.usersLinked !== usersToLink || await tx.users.count({ where: { role_id: null } })) {
+        const [unmapped] = await tx.$queryRaw`SELECT count(*)::int AS "count" FROM "users" WHERE "role_id" IS NULL`;
+        if (summary.usersLinked !== usersToLink || unmapped.count) {
           throw new RoleBackfillError('INCOMPLETE_BACKFILL', 'Role mapping did not complete. The transaction was rolled back.');
         }
         summary.activeAdmins = await tx.users.count({

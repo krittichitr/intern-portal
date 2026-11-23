@@ -21,9 +21,9 @@ model users {
   phone         String?  @db.VarChar(20)
   avatar_url    String?  @db.Text
 
-  // Nullable during backfill; keep the legacy role until authentication cutover.
-  role_id     String? @db.Uuid
-  role_record roles?  @relation(fields: [role_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  // Every user must reference exactly one existing role.
+  role_id     String @db.Uuid
+  role_record roles  @relation(fields: [role_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([role_id])
 }
